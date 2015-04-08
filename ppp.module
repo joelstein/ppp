@@ -1,0 +1,140 @@
+<?php
+
+/**
+ * Implements hook_menu_alter().
+ */
+function ppp_menu_alter(&$items) {
+  // Put page content type at top of list.
+  $items['node/add/page']['weight'] = -1;
+
+  // Disable panelizer node tabs.
+  $items['node/%node/panelizer']['access callback'] = FALSE;
+}
+
+/**
+ * Implements hook_module_implements_alter().
+ */
+function ppp_module_implements_alter(&$implementations, $hook) {
+  // Put our hook_form_alter after other modules.
+  if ($hook == 'form_alter') {
+    $group = $implementations['ppp'];
+    unset($implementations['ppp']);
+    $implementations['ppp'] = $group;
+  }
+}
+
+/**
+ * Implements hook_form_alter().
+ */
+function ppp_form_alter(&$form, &$form_state, $form_id) {
+  // Force saving pages and webforms as custom panelizer (instead of overriding
+  // default) by hiding the buttons that Panelizer adds.
+  if (
+    $form_id == 'panels_ipe_edit_control_form'
+    && is_a($form_state['renderer'], 'panels_renderer_ipe')
+    && strpos($form_state['renderer']->display->cache_key, 'panelizer') !== FALSE
+    && $form_state['renderer']->display->context['panelizer']->type[2] == 'node'
+    && in_array($form_state['renderer']->display->context['panelizer']->data->type, array('page', 'webform'))
+  ) {
+    $form['buttons']['submit']['#value'] = t('Save');
+    $form['buttons']['save_default']['#access'] = FALSE;
+    $form['buttons']['revert_default']['#access'] = FALSE;
+  }
+
+  // Custom content IPE form.
+  if ($form_id == 'ctools_custom_content_type_edit_form') {
+    // Hide some stuff.
+    $form['admin_title']['#access'] = FALSE;
+    $form['substitute']['#access'] = FALSE;
+    $form['contexts']['#access'] = FALSE;
+    $form['title']['#title'] = t('Title (optional)');
+  }
+
+  // Fieldable Panels Panes forms.
+  if ($form_id === 'fieldable_panels_panes_fieldable_panels_pane_content_type_edit_form') {
+    $form['title']['#title'] = t('Title (optional)');
+    $form['view_mode']['#access'] = FALSE;
+  }
+}
+
+/**
+ * Implements hook_form_BAS_FORM_ID_alter() for page_node_form().
+ */
+function ppp_form_node_form_alter(&$form) {
+  // Move title to vertical tab.
+  $form['page_stuff'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Page settings'),
+    '#group' => 'additional_settings',
+    '#weight' => -10,
+  );
+  $form['page_stuff']['title'] = $form['title'];
+  unset($form['title']);
+
+  // Move body field to vertical tab.
+  if (isset($form['body'])) {
+    $form['page_stuff']['body'] = $form['body'];
+    unset($form['body']);
+  }
+
+  // Move Field API fields to vertical tab.
+  foreach (element_children($form) as $key) {
+    if (strpos($key, 'field_') === 0) {
+      $form['page_stuff'][$key] = $form[$key];
+      unset($form[$key]);
+    }
+  }
+
+  // Hide Promoted & Sticky fields.
+  $form['options']['promote']['#access'] = FALSE;
+  $form['options']['sticky']['#access'] = FALSE;
+}
+
+/**
+ * Implements hook_node_update_index().
+ */
+function ppp_node_update_index($node) {
+  // Add Panelized page content to search index.
+  if ($handler = panelizer_entity_plugin_get_handler('node')) {
+    $view_mode = 'page_manager';
+    if ($info = $handler->render_entity($node, $view_mode)) {
+      $build['#view_mode'] = 'default';
+      $build['#theme'] = 'panelizer_view_mode';
+      $build['#panelizer'] = $node->panelizer[$view_mode];
+      $build['#panelizer_content'] = $info;
+      $build['#panelizer_handler'] = $handler;
+      $build['#panelizer_entity'] = $node;
+      $build['#panelizer_bundle'] = $node->type;
+      $build['#panelizer_entity_id'] = $node->nid;
+      return drupal_render($build);
+    }
+  }
+}
+
+/**
+ * Implements hook_ctools_content_subtype_alter() to simplify the Ctools modal.
+ *
+ * @see ctools/help/context-content.html
+ */
+function ppp_ctools_content_subtype_alter(&$subtype, &$plugin) {
+  // Move "Existing node" and "New custom content" to Miscellaneous category.
+  if ($subtype['category'] === t('Custom') && in_array($subtype['title'], array(t('Existing node'), t('New custom content')))) {
+    $subtype['category'] = t('Miscellaneous');
+    $subtype['top level'] = FALSE;
+  }
+
+  // Rename "View panes" to "Views".
+  else if ($subtype['category'] === array(t('View panes'), 0)) {
+    $subtype['category'] = t('Views');
+  }
+
+  // Move fielded panes to top level.
+  else if ($subtype['category'] === t('Fielded panes')) {
+    $subtype['top level'] = TRUE;
+  }
+
+  // Stuff the rest into Miscellaneous category.
+  else {
+    $subtype['category'] = t('Miscellaneous');
+  }
+}

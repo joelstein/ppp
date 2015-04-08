@@ -1,0 +1,6 @@
+name = Panels-powered pages improvements
+description = Improvements to Panels-powered pages.
+core = 7.x
+package = Custom
+dependencies[] = panelizer
+dependencies[] = panels_ipe
