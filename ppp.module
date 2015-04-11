@@ -53,7 +53,6 @@ function ppp_form_alter(&$form, &$form_state, $form_id) {
   // Fieldable Panels Panes forms.
   if ($form_id === 'fieldable_panels_panes_fieldable_panels_pane_content_type_edit_form') {
     $form['title']['#title'] = t('Title (optional)');
-    $form['view_mode']['#access'] = FALSE;
   }
 }
 
